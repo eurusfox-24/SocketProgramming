@@ -1,39 +1,77 @@
 import socket
-import time
+import threading
 import random
+import time
 
-def start_client():
-    # --- CONFIGURATION ---
-    # Use '127.0.0.1' for local test
-    # Use '172.20.10.3' (your IP) for mobile hotspot test
-    server_ip = '127.0.0.1' 
-    port = 55555
 
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def receive_messages(sock):
+    """Function to constantly listen for data from the server."""
+    while True:
+        try:
+            message = sock.recv(1024).decode('utf-8')
+            if not message:
+                print("\n[Server shut down]")
+                break
+            print(f"\n[SERVER]: {message}")
+        except:
+            break
 
-    try:
-        print(f"Attempting to connect to {server_ip}...")
-        client_socket.connect((server_ip, port))
-        print("Connected! Sending sensor data every 5 seconds...")
 
-        while True:
-            # Generate random temperature between 20.0 and 30.0
-            temp = round(random.uniform(20.0, 30.0), 1)
-            message = f"Temperature: {temp} C"
-            
-            # Send data to server
-            client_socket.sendall(message.encode('utf-8'))
-            print(f"Sent: {message}")
-            
-            # Wait for 5 seconds
+def send_temperature(sock):
+    """Generate and send random temperature data every 5 seconds."""
+    while True:
+        try:
+            temperature = round(random.uniform(20.0, 35.0), 2)  # random temp
+            message = f"TEMP:{temperature}°C"
+
+            sock.sendall(message.encode('utf-8'))
+            print(f"[SENT]: {message}")
+
             time.sleep(5)
 
-    except ConnectionRefusedError:
-        print("Error: Could not connect. Is the server running?")
-    except KeyboardInterrupt:
-        print("\nClient stopped.")
+        except:
+            break
+
+
+def start_client():
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # Server IP and Port
+    server_ip = '172.20.10.3'
+    port = 55555
+
+    try:
+        client_socket.connect((server_ip, port))
+        print(f"Connected to server at {server_ip}")
+
+        # Thread to receive server messages
+        threading.Thread(
+            target=receive_messages,
+            args=(client_socket,),
+            daemon=True
+        ).start()
+
+        # Thread to send temperature data
+        threading.Thread(
+            target=send_temperature,
+            args=(client_socket,),
+            daemon=True
+        ).start()
+
+        # Optional: allow manual commands
+        while True:
+            msg = input("[YOU]: ")
+            if msg.lower() == "exit":
+                break
+            client_socket.sendall(msg.encode('utf-8'))
+
+    except Exception as e:
+        print(f"Connection error: {e}")
+
     finally:
         client_socket.close()
+        print("Client closed.")
+
 
 if __name__ == "__main__":
     start_client()
